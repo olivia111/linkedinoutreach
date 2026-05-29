@@ -46,7 +46,7 @@ DEFAULT_FOLLOW_UP_DAILY_LIMIT = 25
 # Set to False to run 24/7. Working hours are a single contiguous window;
 # weekends are no longer special-cased (humans use LinkedIn 7 days a week).
 # ----------------------------------------------------------------------
-ENABLE_ACTIVE_HOURS = False
+ENABLE_ACTIVE_HOURS = True
 ACTIVE_START_HOUR = 9   # inclusive, local time
 ACTIVE_END_HOUR = 19    # exclusive, local time
 ACTIVE_TIMEZONE = system_timezone()
