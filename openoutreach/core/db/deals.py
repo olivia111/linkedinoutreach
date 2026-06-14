@@ -10,6 +10,8 @@ logger = logging.getLogger(__name__)
 _STATE_LOG_STYLE = {
     DealState.QUALIFIED: ("QUALIFIED", "green", []),
     DealState.READY_TO_CONNECT: ("READY_TO_CONNECT", "yellow", ["bold"]),
+    DealState.READY_TO_EMAIL: ("READY_TO_EMAIL", "blue", ["bold"]),
+    DealState.EMAILED: ("EMAILED", "blue", []),
     DealState.PENDING: ("PENDING", "cyan", []),
     DealState.CONNECTED: ("CONNECTED", "green", ["bold"]),
     DealState.COMPLETED: ("COMPLETED", "green", ["bold"]),
