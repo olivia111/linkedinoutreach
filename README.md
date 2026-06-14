@@ -221,7 +221,7 @@ Configure rate limits and behavior via Django Admin (LinkedInProfile + Campaign 
 ## 💬 Community
 
 Join for support and discussions:
-[Telegram Group](https://t.me/+Y5bh9Vg8UVg5ODU0)
+[Telegram Channel](https://t.me/openoutreach)
 
 ---
 
