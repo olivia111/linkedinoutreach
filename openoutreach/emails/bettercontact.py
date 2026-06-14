@@ -69,13 +69,17 @@ def _submit(session: requests.Session, query: FinderQuery) -> str | None:
 def _poll(session: requests.Session, request_id: str) -> dict | None:
     """Poll until status is terminal; return the lead's `data` row, or None."""
     deadline = time.monotonic() + _POLL_TIMEOUT_S
+    attempt = 0
     while True:
         resp = session.get(f"{_BASE}/{request_id}", timeout=_HTTP_TIMEOUT_S)
         resp.raise_for_status()
         body = resp.json()
-        if body.get("status") == "terminated":
+        status = body.get("status")
+        if status == "terminated":
             data = body.get("data", [])
             return data[0] if data else None
+        attempt += 1
+        logger.debug("finder: poll %d for %s — status=%s", attempt, request_id, status)
         if time.monotonic() >= deadline:
             raise TimeoutError(f"poll timed out for {request_id}")
         time.sleep(_POLL_INTERVAL_S)
