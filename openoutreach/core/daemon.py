@@ -24,6 +24,7 @@ from openoutreach.linkedin.diagnostics import failure_diagnostics
 from linkedin_cli.exceptions import AuthenticationError, CheckpointChallengeError
 from openoutreach.linkedin.ml.qualifier import BayesianQualifier, KitQualifier
 from openoutreach.core.models import Task
+from openoutreach.emails.tasks.send import handle_email
 from openoutreach.linkedin.tasks.check_pending import handle_check_pending
 from openoutreach.linkedin.tasks.connect import handle_connect
 from openoutreach.linkedin.tasks.follow_up import handle_follow_up
@@ -34,6 +35,7 @@ _HANDLERS = {
     Task.TaskType.CONNECT: handle_connect,
     Task.TaskType.CHECK_PENDING: handle_check_pending,
     Task.TaskType.FOLLOW_UP: handle_follow_up,
+    Task.TaskType.EMAIL: handle_email,
 }
 
 HEARTBEAT_INTERVAL = 300  # 5 minutes

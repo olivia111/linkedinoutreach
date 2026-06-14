@@ -241,6 +241,51 @@ def plan_check_pending_window(session, campaign) -> int:
     return created
 
 
+# ── Eager drain (no window) ───────────────────────────────────────────
+
+
+def flush_email_queue(session, campaign) -> int:
+    """Drain the READY_TO_EMAIL pool for *campaign* into immediate task slots.
+
+    The eager counterpart to the ``plan_*_window`` planners: those *ration* a
+    rate-limited action over a 24h window to fake human rhythm; email has no
+    anti-bot rhythm to fake, so every queued deal is emitted as an immediate
+    slot (scheduled ``now``, no Poisson spacing, no ranking) and drains
+    back-to-back. The only throttle is the pool-wide per-box daily cap
+    (``Mailbox.objects.remaining_today()``), re-checked at send time.
+
+    No-op when a PENDING email task already exists, no box has headroom, or the
+    pool is empty. Count is scoped to ``campaign.pk`` directly because
+    ``reconcile`` does not set ``session.campaign`` before invoking it.
+    """
+    from openoutreach.crm.models import Deal
+    from openoutreach.emails.models import Mailbox
+
+    if _has_pending(Task.TaskType.EMAIL, campaign.pk):
+        return 0
+
+    remaining = Mailbox.objects.remaining_today()
+    if remaining <= 0:
+        return 0
+
+    queued = Deal.objects.filter(
+        campaign_id=campaign.pk,
+        state=DealState.READY_TO_EMAIL,
+        lead__disqualified=False,
+    ).count()
+    n = min(queued, remaining)
+    if n <= 0:
+        return 0
+
+    now = timezone.now()
+    created = _create_lazy_slots(Task.TaskType.EMAIL, campaign.pk, [now] * n)
+    logger.info(
+        "[%s] flushed %d email slots to send now (queued=%d, cap_remaining=%d)",
+        campaign, created, queued, remaining,
+    )
+    return created
+
+
 # ── Delay helpers ─────────────────────────────────────────────────────
 
 
@@ -298,6 +343,9 @@ def reconcile(session) -> None:
     for campaign in session.campaigns:
         for planner in _PLANNERS:
             planner(session, campaign)
+        # Eager-drain counterpart to the window planners — queue every
+        # ready email to send now (paced only by the per-box daily cap).
+        flush_email_queue(session, campaign)
 
     pending_count = Task.objects.pending().count()
     logger.info("Task queue reconciled: %d pending tasks", pending_count)
