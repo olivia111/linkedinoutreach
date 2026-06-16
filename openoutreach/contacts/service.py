@@ -43,7 +43,10 @@ def resolve(lead) -> str | None:
         return None
     if resp.status_code != 200:
         return None  # 404 miss (or anything else) → pay the finder
-    email = resp.json().get("email")
+    # The store returns the profile's address(es) as a list (one today, the
+    # full dbt-prepared set later); we send to one, so take the first.
+    emails = resp.json().get("emails") or []
+    email = emails[0] if emails else None
     if email:
         logger.info("contacts: resolved %s for %s (saved a paid lookup)", email, lead.public_identifier)
     return email

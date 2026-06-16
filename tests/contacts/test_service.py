@@ -56,9 +56,22 @@ class TestResolve:
     def test_hit_returns_email(self):
         _config()
         lead = LeadFactory(public_identifier="jane-doe")
-        body = {"public_identifier": "jane-doe", "email": "jane@acme.com"}
+        body = {"public_identifier": "jane-doe", "emails": ["jane@acme.com"]}
         with patch.object(service.requests, "get", return_value=_resp(200, body)):
             assert service.resolve(lead) == "jane@acme.com"
+
+    def test_hit_with_multiple_emails_takes_first(self):
+        _config()
+        lead = LeadFactory(public_identifier="jane-doe")
+        body = {"public_identifier": "jane-doe", "emails": ["jane@acme.com", "j@personal.com"]}
+        with patch.object(service.requests, "get", return_value=_resp(200, body)):
+            assert service.resolve(lead) == "jane@acme.com"
+
+    def test_hit_with_empty_emails_returns_none(self):
+        _config()
+        lead = LeadFactory(public_identifier="jane-doe")
+        with patch.object(service.requests, "get", return_value=_resp(200, {"emails": []})):
+            assert service.resolve(lead) is None
 
     def test_miss_returns_none(self):
         _config()
