@@ -133,12 +133,47 @@ class TestQualifyAutoDecisions:
             patch("openoutreach.core.db.deals.set_profile_state") as mock_set_state,
             patch("openoutreach.contacts.service.contribute") as mock_contribute,
         ):
-            mock_promote.return_value.lead.resolve_api_email.return_value = True
+            # Model the api_email null→non-null transition the give-back gate keys on.
+            lead = mock_promote.return_value.lead
+            lead.api_email = None
+
+            def _resolve():
+                lead.api_email = "alice@acme.com"
+                return True
+
+            lead.resolve_api_email.side_effect = _resolve
             run_qualification(session, qualifier)
             mock_set_state.assert_called_once()
             assert mock_set_state.call_args.args[2] == DealState.READY_TO_EMAIL
-            mock_contribute.assert_called_once()  # BetterContact hit → moment-1 give-back
+            mock_contribute.assert_called_once()  # fresh BetterContact hit → moment-1 give-back
             assert mock_contribute.call_args.args[3] == "bettercontact"  # tagged with the BetterContact origin
+
+    def test_cached_api_email_routes_but_does_not_recontribute(self, db):
+        """An already-resolved api_email still routes to READY_TO_EMAIL but is not
+        re-sent to the hub — the give-back already happened on the first resolve."""
+        from openoutreach.crm.models import DealState
+
+        qualifier = _make_trained_qualifier()
+        session = MagicMock()
+        _create_lead_with_embedding(1, "alice")
+        _enable_email_channel()
+
+        with (
+            patch("openoutreach.linkedin.db.leads.get_leads_for_qualification", return_value=_fake_leads()),
+            patch("openoutreach.linkedin.pipeline.qualify._fetch_profile_text", return_value="engineer at acme"),
+            patch("openoutreach.linkedin.ml.qualifier.qualify_with_llm", return_value=(1, "Good fit")),
+            patch.object(qualifier, "update"),
+            patch("openoutreach.linkedin.db.leads.promote_lead_to_deal") as mock_promote,
+            patch("openoutreach.core.db.deals.set_profile_state") as mock_set_state,
+            patch("openoutreach.contacts.service.contribute") as mock_contribute,
+        ):
+            lead = mock_promote.return_value.lead
+            lead.api_email = "alice@acme.com"  # already resolved before this run
+            lead.resolve_api_email.return_value = True  # cached hit
+            run_qualification(session, qualifier)
+            mock_set_state.assert_called_once()
+            assert mock_set_state.call_args.args[2] == DealState.READY_TO_EMAIL
+            mock_contribute.assert_not_called()
 
     def test_genuine_email_miss_stays_qualified(self, db):
         """A genuine BetterContact miss (False) leaves the Deal QUALIFIED → the connect funnel."""

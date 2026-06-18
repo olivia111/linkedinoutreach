@@ -77,24 +77,30 @@ def _existing_deal_or_lead(public_id: str, campaign):
 def capture_and_contribute(lead, session) -> None:
     """Best-effort LinkedIn contact-info capture + contribution for a connection.
 
-    Fired on the CONNECTED transition and re-fired on each follow-up visit while
-    the overlay is still email-empty — LinkedIn often doesn't expose a 1st-degree
-    connection's email right at accept time, so a later visit can pick it up.
-    ``Lead.capture_contact_info`` is the idempotency owner (skips the scrape once
-    an email is stored); on a fresh hit those addresses are given back to the
-    central store. A failure here must never roll back the transition or fail the
-    task, so expected scrape/network errors are swallowed with a log;
-    ``AuthenticationError`` still propagates (the daemon's reauth handler owns it,
-    and capture is moot on a dead session).
+    Fired on the CONNECTED transition and on each follow-up visit, but the
+    contribution rides the ``Lead.contact_info`` null→non-null transition: it is
+    given to the central store **only on the visit that first captures the
+    overlay**. ``Lead.capture_contact_info`` is write-once (skips the scrape once
+    a value is stored), so a later visit finds the field already set and no-ops —
+    no re-sending the same source to the append-only hub log on every follow-up.
+    While the scrape keeps failing the field stays null, so capture (and the
+    contribution) is retried on the next visit. A failure here must never roll
+    back the transition or fail the task, so expected scrape/network errors are
+    swallowed with a log; ``AuthenticationError`` still propagates (the daemon's
+    reauth handler owns it, and capture is moot on a dead session).
     """
     from linkedin_cli.exceptions import ProfileInaccessibleError
     from openoutreach.contacts import service as contacts
 
+    fresh_capture = lead.contact_info is None
     try:
         lead.capture_contact_info(session)
     except (ProfileInaccessibleError, IOError) as exc:
         logger.warning("contact-info capture failed for %s: %s", lead.public_identifier, exc)
         return
+
+    if not fresh_capture:
+        return  # overlay already captured + contributed on an earlier visit
 
     emails = (lead.contact_info or {}).get("emails") or []
     logger.debug("contact-info captured for %s: %d email(s)", lead.public_identifier, len(emails))

@@ -156,9 +156,15 @@ def _resolve_email(session, lead) -> bool:
         lead.api_email = cached_email
         lead.save(update_fields=["api_email"])
         return True
-    if bettercontact.is_configured() and lead.resolve_api_email() is True:  # paid finder
-        contacts.contribute(session, lead, [lead.api_email], contacts.ORIGIN_BETTERCONTACT)
-        return True
+    if bettercontact.is_configured():  # paid finder
+        already_resolved = bool(lead.api_email)
+        if lead.resolve_api_email() is True:
+            # Give back only on the fresh resolve (api_email null→non-null) — a
+            # cached hit was already contributed, and re-sending it just adds a
+            # duplicate row to the append-only hub log.
+            if not already_resolved:
+                contacts.contribute(session, lead, [lead.api_email], contacts.ORIGIN_BETTERCONTACT)
+            return True
     return False
 
 

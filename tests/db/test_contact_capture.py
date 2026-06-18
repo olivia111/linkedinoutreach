@@ -71,6 +71,21 @@ class TestContactCaptureOnConnect:
         # the overlay scrape is tagged as profile_info provenance
         assert contribute.call_args.args[3] == "profile_info"
 
+    def test_repeat_visit_does_not_recontribute(self, fake_session):
+        # The overlay is captured + contributed once; a later visit (bounce away
+        # and back, as the follow-up loop does) finds contact_info already set
+        # and must not re-send the same source to the append-only hub log.
+        _promote_alice(fake_session)
+        patcher, _ = _patch_api()
+        with patch("openoutreach.contacts.service.contribute") as contribute:
+            try:
+                set_profile_state(fake_session, "alice", ProfileState.CONNECTED.value)
+                set_profile_state(fake_session, "alice", ProfileState.PENDING.value)
+                set_profile_state(fake_session, "alice", ProfileState.CONNECTED.value)
+            finally:
+                patcher.stop()
+        contribute.assert_called_once()
+
     def test_non_connected_does_not_capture(self, fake_session):
         _promote_alice(fake_session)
         patcher, method = _patch_api()
