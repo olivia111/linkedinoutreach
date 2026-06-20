@@ -55,9 +55,9 @@ LLM_API_BASE = Text(
 NEWSLETTER = Confirm("newsletter", "Subscribe to OpenOutreach newsletter?", default=True)
 # contribute_to_hub is NOT asked — it is derived from the operator's LinkedIn
 # country at first daemon run (apply_gdpr_contribution_override in geo.py).
-CONNECT_DAILY = IntText("connect_daily_limit", "Connection requests daily limit", default=50)
-CONNECT_WEEKLY = IntText("connect_weekly_limit", "Connection requests weekly limit", default=250)
-FOLLOW_UP_DAILY = IntText("follow_up_daily_limit", "Follow-up messages daily limit", default=100)
+CONNECT_DAILY = IntText("connect_daily_limit", "LinkedIn connection requests daily limit", default=50)
+CONNECT_WEEKLY = IntText("connect_weekly_limit", "LinkedIn connection requests weekly limit", default=250)
+FOLLOW_UP_DAILY = IntText("follow_up_daily_limit", "LinkedIn follow-up messages daily limit", default=100)
 
 # ── Legal ────────────────────────────────────────────────────────
 
