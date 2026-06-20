@@ -39,7 +39,6 @@ from django.utils import timezone
 from openoutreach.core.conf import (
     ACTIVE_END_HOUR,
     ACTIVE_START_HOUR,
-    ACTIVE_TIMEZONE,
     CAMPAIGN_CONFIG,
     CHECK_PENDING_DAILY_CAP,
     ENABLE_ACTIVE_HOURS,
@@ -53,14 +52,15 @@ logger = logging.getLogger(__name__)
 # ── Working-hours arithmetic ──────────────────────────────────────────
 
 
-def _working_intervals(start, end) -> list[tuple]:
+def _working_intervals(start, end, tz_name) -> list[tuple]:
     """Return ``[(s, e), ...]`` UTC datetimes for the working portions of
-    ``[start, end]``. When ``ENABLE_ACTIVE_HOURS`` is False the only
-    interval is ``[(start, end)]``."""
-    if not ENABLE_ACTIVE_HOURS:
+    ``[start, end]``. The whole window ``[(start, end)]`` is returned —
+    i.e. no gating — when ``ENABLE_ACTIVE_HOURS`` is False or ``tz_name`` is
+    None (timezone not resolved, e.g. unknown profile country)."""
+    if not ENABLE_ACTIVE_HOURS or tz_name is None:
         return [(start, end)]
 
-    tz = ZoneInfo(ACTIVE_TIMEZONE)
+    tz = ZoneInfo(tz_name)
     local_start = start.astimezone(tz)
     local_end = end.astimezone(tz)
 
@@ -82,16 +82,16 @@ def _working_intervals(start, end) -> list[tuple]:
     return intervals
 
 
-def working_seconds_in_window(start, end) -> float:
+def working_seconds_in_window(start, end, tz_name) -> float:
     """Sum of seconds inside ``[ACTIVE_START_HOUR, ACTIVE_END_HOUR]`` between
     ``start`` and ``end``. Returns ``(end - start).total_seconds()`` when
-    active hours are disabled."""
-    if not ENABLE_ACTIVE_HOURS:
+    active hours are disabled or ``tz_name`` is None (no gating)."""
+    if not ENABLE_ACTIVE_HOURS or tz_name is None:
         return max(0.0, (end - start).total_seconds())
-    return sum((e - s).total_seconds() for s, e in _working_intervals(start, end))
+    return sum((e - s).total_seconds() for s, e in _working_intervals(start, end, tz_name))
 
 
-def poisson_slot_times(now, n: int, horizon_hours: float = 24) -> list:
+def poisson_slot_times(now, n: int, tz_name, horizon_hours: float = 24) -> list:
     """Return ``n`` strictly-increasing timestamps inside the working
     portion of ``[now, now + horizon_hours]``.
 
@@ -106,7 +106,7 @@ def poisson_slot_times(now, n: int, horizon_hours: float = 24) -> list:
         return []
 
     end = now + timedelta(hours=horizon_hours)
-    intervals = _working_intervals(now, end)
+    intervals = _working_intervals(now, end, tz_name)
     total = sum((e - s).total_seconds() for s, e in intervals)
     if total <= 0:
         return []
@@ -153,9 +153,10 @@ def _create_lazy_slots(task_type: "Task.TaskType", campaign_id: int, times: list
     return len(times)
 
 
-def _plan_slots(task_type: "Task.TaskType", campaign_id: int, n: int) -> int:
+def _plan_slots(task_type: "Task.TaskType", campaign_id: int, n: int, tz_name) -> int:
     """Schedule *n* lazy slots: one fires immediately, the remaining
-    ``n - 1`` are Poisson-spaced across the next 24h working window.
+    ``n - 1`` are Poisson-spaced across the next 24h working window
+    (``tz_name`` defines that window's local hours; None → full 24h).
 
     The leading immediate slot is intentional — without it the first
     action of a freshly-planned window would sit ``T/n`` away on average
@@ -165,7 +166,7 @@ def _plan_slots(task_type: "Task.TaskType", campaign_id: int, n: int) -> int:
     if n <= 0:
         return 0
     now = timezone.now()
-    times = [now] + poisson_slot_times(now, n - 1)
+    times = [now] + poisson_slot_times(now, n - 1, tz_name)
     return _create_lazy_slots(task_type, campaign_id, times)
 
 
@@ -185,7 +186,7 @@ def plan_connect_window(session, campaign) -> int:
     if campaign.is_freemium:
         n = int(n * campaign.action_fraction)
 
-    created = _plan_slots(Task.TaskType.CONNECT, campaign.pk, n)
+    created = _plan_slots(Task.TaskType.CONNECT, campaign.pk, n, session.active_timezone)
     if created:
         logger.info(
             "[%s] planned %d connect slots over next 24h — 1 fires now, "
@@ -204,7 +205,7 @@ def plan_follow_up_window(session, campaign) -> int:
     profile = session.linkedin_profile
     daily_remaining = max(0, profile.follow_up_daily_limit - profile._daily_count("follow_up"))
 
-    created = _plan_slots(Task.TaskType.FOLLOW_UP, campaign.pk, daily_remaining)
+    created = _plan_slots(Task.TaskType.FOLLOW_UP, campaign.pk, daily_remaining, session.active_timezone)
     if created:
         logger.info(
             "[%s] planned %d follow_up slots over next 24h — 1 fires now, "
@@ -237,7 +238,7 @@ def plan_check_pending_window(session, campaign) -> int:
     ).count()
     n = min(n_due, CHECK_PENDING_DAILY_CAP)
 
-    created = _plan_slots(Task.TaskType.CHECK_PENDING, campaign.pk, n)
+    created = _plan_slots(Task.TaskType.CHECK_PENDING, campaign.pk, n, session.active_timezone)
     if created:
         logger.info(
             "[%s] planned %d check_pending slots over next 24h — 1 fires now, "

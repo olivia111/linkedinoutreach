@@ -17,7 +17,6 @@ from termcolor import colored
 from openoutreach.core.conf import (
     ACTIVE_END_HOUR,
     ACTIVE_START_HOUR,
-    ACTIVE_TIMEZONE,
     CAMPAIGN_CONFIG,
     ENABLE_ACTIVE_HOURS,
 )
@@ -233,14 +232,17 @@ def _build_qualifiers(campaigns, cfg, kit_model=None):
 # ------------------------------------------------------------------
 
 
-def seconds_until_active() -> float:
+def seconds_until_active(tz_name: str | None) -> float:
     """Return seconds to wait before the next active window, or 0 if active now.
 
-    Single contiguous daily window — no weekend skip.
+    Single contiguous daily window — no weekend skip. Returns 0 (never gate)
+    when active hours are disabled or ``tz_name`` is None — the timezone is
+    resolved from the operator's LinkedIn profile post-login, and an unknown
+    profile country leaves it None rather than guessing UTC.
     """
-    if not ENABLE_ACTIVE_HOURS:
+    if not ENABLE_ACTIVE_HOURS or tz_name is None:
         return 0.0
-    tz = ZoneInfo(ACTIVE_TIMEZONE)
+    tz = ZoneInfo(tz_name)
     now = timezone.localtime(timezone=tz)
 
     if ACTIVE_START_HOUR <= now.hour < ACTIVE_END_HOUR:
@@ -318,6 +320,14 @@ def run_daemon(session):
         len(campaigns),
     )
 
+    if ENABLE_ACTIVE_HOURS:
+        logger.info(
+            "Active hours %02d:00–%02d:00 — timezone %s",
+            ACTIVE_START_HOUR, ACTIVE_END_HOUR, session.active_timezone_provenance(),
+        )
+    else:
+        logger.info("Active hours disabled — running 24/7")
+
     # cloud_promo = _CloudPromoRotator(interval=60)  # tmp disabled — see below
     heartbeat = Heartbeat()
     rhythm = _HumanRhythmBreak(heartbeat)
@@ -332,9 +342,13 @@ def run_daemon(session):
     # Single-threaded: one task at a time, no concurrent enqueuing,
     # so sleeping until the next scheduled_at is safe.
     while True:
-        pause = seconds_until_active()
+        pause = seconds_until_active(session.active_timezone)
         if pause > 0:
-            logger.info("Outside active hours — sleeping %s", _hm(pause))
+            logger.info(
+                "Outside active hours (%02d:00–%02d:00 %s) — next window in %s",
+                ACTIVE_START_HOUR, ACTIVE_END_HOUR,
+                session.active_timezone, _hm(pause),
+            )
             sleep_with_heartbeat(
                 pause, heartbeat,
                 lambda left: f"outside active hours, {_hm(left)} left",

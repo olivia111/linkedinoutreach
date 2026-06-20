@@ -52,6 +52,9 @@ class FakeAccountSession:
             "last_name": "Ramirez",
             "urn": "urn:li:fsd_profile:TEST",
         }
+        # Resolved post-login on the real session; None here → no active-hours
+        # gating (planner tests disable active hours regardless).
+        self.active_timezone = None
 
     @property
     def campaigns(self):

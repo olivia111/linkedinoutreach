@@ -67,6 +67,40 @@ class AccountSession:
         register_self_lead(self, profile)
         return profile
 
+    @cached_property
+    def active_timezone(self) -> str | None:
+        """IANA zone for the active-hours window, resolved once per session.
+
+        An explicit ``ACTIVE_TIMEZONE`` in conf wins (operator override);
+        otherwise the zone is inferred from the LinkedIn profile country.
+        None when neither yields a zone — the scheduler/daemon treat None as
+        "no active-hours gating" rather than guessing UTC. Resolving via
+        ``self_profile`` means this fires only after login.
+        """
+        from openoutreach.core.conf import ACTIVE_TIMEZONE
+        from openoutreach.core.tz_country import timezone_for_country
+
+        if ACTIVE_TIMEZONE:
+            return ACTIVE_TIMEZONE
+        return timezone_for_country(self.self_profile.get("country_code"))
+
+    def active_timezone_provenance(self) -> str:
+        """Human-readable note on where ``active_timezone`` came from — used in
+        the daemon's active-hours log so an inferred (and possibly wrong) zone
+        is visible and overridable."""
+        from openoutreach.core.conf import ACTIVE_TIMEZONE
+
+        if ACTIVE_TIMEZONE:
+            return f"{ACTIVE_TIMEZONE} (configured via ACTIVE_TIMEZONE)"
+        tz = self.active_timezone
+        country = (self.self_profile.get("country_code") or "?").upper()
+        if tz:
+            return (
+                f"{tz} (inferred from LinkedIn profile country {country}; "
+                "override with ACTIVE_TIMEZONE)"
+            )
+        return "unknown (no profile country and no ACTIVE_TIMEZONE) — not gating"
+
     def wait(self, min_delay=MIN_DELAY, max_delay=MAX_DELAY):
         random_sleep(min_delay, max_delay)
         self.page.wait_for_load_state("domcontentloaded")

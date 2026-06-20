@@ -3,8 +3,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from openoutreach.core.tz_detect import system_timezone
-
 
 # ----------------------------------------------------------------------
 # Paths
@@ -43,11 +41,16 @@ DEFAULT_EMAIL_DAILY_LIMIT = 30
 # Active-hours schedule (daemon pauses outside this window)
 # Set to False to run 24/7. Working hours are a single contiguous window;
 # weekends are no longer special-cased (humans use LinkedIn 7 days a week).
+#
+# ACTIVE_TIMEZONE is None by default: the window timezone is resolved at
+# runtime from the operator's LinkedIn profile country, once, after login
+# (see AccountSession.active_timezone). Set it to an IANA name here (or via
+# config) to override the profile and pin the window explicitly.
 # ----------------------------------------------------------------------
 ENABLE_ACTIVE_HOURS = False
 ACTIVE_START_HOUR = 9   # inclusive, local time
 ACTIVE_END_HOUR = 19    # exclusive, local time
-ACTIVE_TIMEZONE = system_timezone()
+ACTIVE_TIMEZONE = None  # None → resolve from LinkedIn profile country post-login
 
 # ----------------------------------------------------------------------
 # Planner cap for check_pending: at most this many lazy slots per 24h

@@ -32,27 +32,31 @@ class TestWorkingSecondsInWindow:
     @patch("openoutreach.core.scheduler.ENABLE_ACTIVE_HOURS", False)
     def test_disabled_returns_full_horizon(self):
         now = datetime(2026, 5, 10, 12, tzinfo=ZoneInfo("UTC"))
-        assert scheduler.working_seconds_in_window(now, now + timedelta(hours=24)) == 24 * 3600
+        assert scheduler.working_seconds_in_window(now, now + timedelta(hours=24), "UTC") == 24 * 3600
+
+    def test_none_timezone_returns_full_horizon(self):
+        # Unresolved timezone → no gating, even with active hours enabled.
+        with patch("openoutreach.core.scheduler.ENABLE_ACTIVE_HOURS", True):
+            now = datetime(2026, 5, 10, 12, tzinfo=ZoneInfo("UTC"))
+            assert scheduler.working_seconds_in_window(now, now + timedelta(hours=24), None) == 24 * 3600
 
     @patch("openoutreach.core.scheduler.ENABLE_ACTIVE_HOURS", True)
     @patch("openoutreach.core.scheduler.ACTIVE_START_HOUR", 9)
     @patch("openoutreach.core.scheduler.ACTIVE_END_HOUR", 19)
-    @patch("openoutreach.core.scheduler.ACTIVE_TIMEZONE", "UTC")
     def test_18h_start_with_9_to_19_window(self):
         # Start at 18:00 → 1h today (18-19) + 9h tomorrow (9-18, since horizon ends at 18:00) = 10h
         now = datetime(2026, 5, 10, 18, tzinfo=ZoneInfo("UTC"))
-        seconds = scheduler.working_seconds_in_window(now, now + timedelta(hours=24))
+        seconds = scheduler.working_seconds_in_window(now, now + timedelta(hours=24), "UTC")
         assert seconds == pytest.approx(10 * 3600, abs=1)
 
     @patch("openoutreach.core.scheduler.ENABLE_ACTIVE_HOURS", True)
     @patch("openoutreach.core.scheduler.ACTIVE_START_HOUR", 9)
     @patch("openoutreach.core.scheduler.ACTIVE_END_HOUR", 19)
-    @patch("openoutreach.core.scheduler.ACTIVE_TIMEZONE", "UTC")
     def test_inside_window_returns_remaining_plus_next_day(self):
         # Start at 09:00 → 10h today + 10h tomorrow up to 19:00 (= start + 24h hits 09:00) = 14h
         # Actually: now=09:00, end=09:00 next day. Today: 9-19 = 10h. Next day: 9-9 = 0h. Total = 10h.
         now = datetime(2026, 5, 10, 9, tzinfo=ZoneInfo("UTC"))
-        seconds = scheduler.working_seconds_in_window(now, now + timedelta(hours=24))
+        seconds = scheduler.working_seconds_in_window(now, now + timedelta(hours=24), "UTC")
         assert seconds == pytest.approx(10 * 3600, abs=1)
 
 
@@ -63,13 +67,13 @@ class TestPoissonSlotTimes:
     @patch("openoutreach.core.scheduler.ENABLE_ACTIVE_HOURS", False)
     def test_zero_returns_empty(self):
         now = timezone.now()
-        assert scheduler.poisson_slot_times(now, 0) == []
+        assert scheduler.poisson_slot_times(now, 0, "UTC") == []
 
     @patch("openoutreach.core.scheduler.ENABLE_ACTIVE_HOURS", False)
     def test_strictly_increasing(self):
         random.seed(42)
         now = timezone.now()
-        times = scheduler.poisson_slot_times(now, 20)
+        times = scheduler.poisson_slot_times(now, 20, "UTC")
         assert all(t2 > t1 for t1, t2 in zip(times, times[1:]))
 
     @patch("openoutreach.core.scheduler.ENABLE_ACTIVE_HOURS", False)
@@ -78,18 +82,17 @@ class TestPoissonSlotTimes:
         now = timezone.now()
         end = now + timedelta(hours=24)
         for _ in range(20):
-            times = scheduler.poisson_slot_times(now, 20)
+            times = scheduler.poisson_slot_times(now, 20, "UTC")
             assert all(now <= t < end for t in times)
 
     @patch("openoutreach.core.scheduler.ENABLE_ACTIVE_HOURS", True)
     @patch("openoutreach.core.scheduler.ACTIVE_START_HOUR", 9)
     @patch("openoutreach.core.scheduler.ACTIVE_END_HOUR", 19)
-    @patch("openoutreach.core.scheduler.ACTIVE_TIMEZONE", "UTC")
     def test_active_hours_constraint(self):
         random.seed(123)
         now = datetime(2026, 5, 10, 9, tzinfo=ZoneInfo("UTC"))
         for _ in range(10):
-            times = scheduler.poisson_slot_times(now, 20)
+            times = scheduler.poisson_slot_times(now, 20, "UTC")
             for t in times:
                 local = t.astimezone(ZoneInfo("UTC"))
                 assert 9 <= local.hour < 19, f"slot {local} outside [9,19)"
@@ -104,7 +107,7 @@ class TestPoissonSlotTimes:
         means = []
         now = timezone.now()
         for _ in range(1000):
-            times = scheduler.poisson_slot_times(now, N)
+            times = scheduler.poisson_slot_times(now, N, "UTC")
             assert len(times) == N
             deltas = [(t2 - t1).total_seconds() for t1, t2 in zip(times, times[1:])]
             means.append(sum(deltas) / len(deltas))
