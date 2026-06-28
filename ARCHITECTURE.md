@@ -84,7 +84,7 @@ Per-type recompute trigger: when a type's PENDING queue is empty for a campaign,
 
 Three task types (handlers in `openoutreach/linkedin/tasks/`, signature: `handle_*(task, session, qualifiers)`):
 
-1. **`handle_connect`** — Unified via `ConnectStrategy` dataclass. Regular: `find_candidate()` from `pools.py`; freemium: `find_freemium_candidate()`. Unreachable detection after `MAX_CONNECT_ATTEMPTS` (3). No self-rescheduling — the planner owns timing.
+1. **`handle_connect`** — Unified via `ConnectStrategy` dataclass. Regular: `find_candidate()` from `pools.py`; freemium: `find_freemium_candidate()`. Unreachable detection after `MAX_CONNECT_ATTEMPTS` (3). No self-rescheduling — the planner owns timing. On the freemium path, `_connect_author_once()` spends the first slot on a one-time, connect-only link to the tool's author (`linkedin_cli.cli.AUTHOR_PUBLIC_ID`; disclosed in `LEGAL_NOTICE.md` §4): the author Lead is created `disqualified=True`, which both marks it done (existence check skips it thereafter) and excludes it from every pool — including follow-up — so the agentic conversation never targets the author.
 2. **`handle_check_pending`** — Eligibility query: oldest PENDING deal in the campaign with `next_check_pending_at <= now`. If none, mark task DONE. On still-PENDING outcome, double `backoff_hours` and re-stamp `next_check_pending_at`.
 3. **`handle_follow_up`** — Eligibility query: oldest CONNECTED deal in the campaign with no recent outgoing message. If none, mark task DONE. Otherwise call `run_follow_up_agent()` (returns `FollowUpDecision`: `send_message`/`mark_completed`/`wait`) and execute deterministically.
 
