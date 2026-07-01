@@ -46,6 +46,14 @@ def handle_email(task, session, qualifiers):
     materialize_profile_summary_if_missing(deal, session)
     draft = compose_opener_email(session, deal)
 
+    from openoutreach.core.approval import require_approval
+    if not require_approval(
+        "cold email",
+        f"to {deal.lead.api_email} (subject: {draft.subject})",
+    ):
+        logger.info("[%s] email: not approved — skipped", campaign)
+        return
+
     message_id = send_email(
         mailbox, deal.lead.api_email, draft.subject, draft.body,
         bcc=session.linkedin_profile.linkedin_username,

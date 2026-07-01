@@ -19,6 +19,24 @@ def _ensure_crm_data(db):
 
 
 @pytest.fixture(autouse=True)
+def _auto_approve(request):
+    """Disable the human-in-the-loop approval gate so action tests exercise the
+    send logic, not the prompt. The dedicated gate tests opt out with the
+    `require_approval_gate` marker and drive `conf.REQUIRE_APPROVAL` themselves."""
+    from openoutreach.core import conf
+
+    if "require_approval_gate" in request.keywords:
+        yield
+        return
+    original = conf.REQUIRE_APPROVAL
+    conf.REQUIRE_APPROVAL = False
+    try:
+        yield
+    finally:
+        conf.REQUIRE_APPROVAL = original
+
+
+@pytest.fixture(autouse=True)
 def _mock_embeddings(request):
     """Stub fastembed so tests don't need the ONNX model."""
     if "no_embed_mock" in request.keywords:

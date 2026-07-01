@@ -43,8 +43,11 @@ class OnboardConfig:
     llm_api_key: str = ""
     ai_model: str = ""
     llm_api_base: str = ""
-    newsletter: bool = True
-    contribute_to_hub: bool = True
+    # Opt-out by default: no newsletter signup or hub contribution unless the
+    # operator explicitly turns it on. Any actual send is still confirmed
+    # interactively via core.approval.require_approval.
+    newsletter: bool = False
+    contribute_to_hub: bool = False
     connect_daily_limit: int = DEFAULT_CONNECT_DAILY_LIMIT
     follow_up_daily_limit: int = DEFAULT_FOLLOW_UP_DAILY_LIMIT
     legal_acceptance: bool = False

@@ -157,6 +157,11 @@ def _resolve_email(session, lead) -> bool:
         lead.save(update_fields=["api_email"])
         return True
     if bettercontact.is_configured():  # paid finder
+        from openoutreach.core.approval import require_approval
+        if not require_approval(
+            "paid BetterContact email lookup", lead.public_identifier,
+        ):
+            return False
         already_resolved = bool(lead.api_email)
         if lead.resolve_api_email() is True:
             # Give back only on the fresh resolve (api_email null→non-null) — a

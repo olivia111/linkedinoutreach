@@ -74,5 +74,10 @@ def ensure_newsletter_subscription(session: AccountSession, linkedin_url: str | 
         logger.warning("No valid email for newsletter: %s", session)
         return
 
+    from openoutreach.core.approval import require_approval
+    if not require_approval("OpenOutreach newsletter signup", f"subscribe {email}"):
+        logger.info("Newsletter signup skipped (not approved)")
+        return
+
     logger.debug("Subscribing %s to OpenOutreach newsletter...", email)
     subscribe_to_newsletter(email, linkedin=linkedin_url)

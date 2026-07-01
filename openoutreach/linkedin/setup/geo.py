@@ -87,44 +87,27 @@ def is_eea_located(country_code: str | None) -> bool:
 
 
 def apply_gdpr_newsletter_override(session, country_code: str | None):
-    """Auto-enable newsletter subscription for non-GDPR locations.
+    """No-op: never auto-change the newsletter opt-in.
 
-    If the country code is NOT GDPR-protected, sets
-    ``session.linkedin_profile.subscribe_newsletter = True`` and saves.
-    If GDPR-protected, does nothing (respects existing config).
+    Disabled as part of the human-in-the-loop change — no config flag flips
+    without the operator. ``subscribe_newsletter`` stays exactly as configured in
+    Django Admin, and the actual signup is still confirmed via
+    ``core.approval.require_approval`` at send time.
     """
-    if not is_gdpr_protected(country_code):
-        session.linkedin_profile.subscribe_newsletter = True
-        session.linkedin_profile.save(update_fields=["subscribe_newsletter"])
-        logger.info(
-            "Non-GDPR country (%s): auto-enabled newsletter for %s",
-            country_code, session,
-        )
-    else:
-        logger.debug(
-            "GDPR-protected country (%s): newsletter config unchanged for %s",
-            country_code, session,
-        )
+    logger.debug(
+        "Newsletter auto-override disabled (country %s) — respecting configured "
+        "value for %s", country_code, session,
+    )
 
 
 def apply_gdpr_contribution_override(session, country_code: str | None):
-    """Set central-store contribution from the operator's jurisdiction.
+    """No-op: never auto-change the contacts-store contribution opt-in.
 
-    The contacts-store sibling of ``apply_gdpr_newsletter_override``, but keyed to
-    the **narrower data-collection line** (``is_eea_located``), not the broad
-    newsletter set: contribution is about sharing contact data, so it tracks the
-    same jurisdictions the store's collection gate uses. The onboarding wizard no
-    longer asks — nationality is the single source of truth: an operator outside
-    the EEA/UK/CH contributes (and earns give-to-get credits); an EEA/UK/CH (or
-    unknown-location) operator does not. Runs once per profile, gated by
-    ``newsletter_processed`` in ``rundaemon``.
+    Disabled as part of the human-in-the-loop change — ``contribute_to_hub`` stays
+    exactly as configured in Django Admin, and any contribution is still confirmed
+    via ``core.approval.require_approval`` before it leaves the machine.
     """
-    contribute = not is_eea_located(country_code)
-    profile = session.linkedin_profile
-    if profile.contribute_to_hub != contribute:
-        profile.contribute_to_hub = contribute
-        profile.save(update_fields=["contribute_to_hub"])
-    logger.info(
-        "Operator country (%s): store contribution %s for %s",
-        country_code, "enabled" if contribute else "disabled", session,
+    logger.debug(
+        "Contribution auto-override disabled (country %s) — respecting configured "
+        "value for %s", country_code, session,
     )

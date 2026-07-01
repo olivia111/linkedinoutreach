@@ -1,6 +1,7 @@
 # openoutreach/core/conf.py
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 
@@ -58,6 +59,20 @@ ACTIVE_TIMEZONE = None  # None → resolve from LinkedIn profile country post-lo
 # Overflow rolls into the next planning cycle.
 # ----------------------------------------------------------------------
 CHECK_PENDING_DAILY_CAP = 100
+
+# ----------------------------------------------------------------------
+# Human-in-the-loop approval
+# ----------------------------------------------------------------------
+# When True (the default), every outbound action that leaves the local machine —
+# a LinkedIn connection request, a follow-up message, a cold email, an
+# OpenOutreach newsletter signup, a contacts-store contribution, a paid email
+# lookup — must be confirmed interactively (y/N) on the terminal before it runs.
+# With no TTY attached the action is denied (never act unattended). Set to False
+# here, or export REQUIRE_APPROVAL=0, to restore the original fully-autonomous
+# behavior.
+REQUIRE_APPROVAL = os.environ.get("REQUIRE_APPROVAL", "1").strip().lower() not in (
+    "0", "false", "no", "off", "",
+)
 
 # ----------------------------------------------------------------------
 # Campaign config (timing + ML defaults — hardcoded, no YAML)

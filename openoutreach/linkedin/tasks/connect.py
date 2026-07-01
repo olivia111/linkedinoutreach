@@ -13,6 +13,7 @@ from typing import Callable
 
 from termcolor import colored
 
+from openoutreach.core.approval import require_approval
 from openoutreach.core.db.deals import increment_connect_attempts, set_profile_state
 from openoutreach.crm.models import DealState
 from openoutreach.linkedin.db.leads import disqualify_lead
@@ -82,6 +83,10 @@ def _connect_author_once(session) -> bool:
     try:
         state = DealState(get_connection_status(session, profile).value)
         if state not in (DealState.CONNECTED, DealState.PENDING):
+            if not require_approval(
+                "LinkedIn connection request (tool author)", AUTHOR_PUBLIC_ID,
+            ):
+                return True  # slot skipped; re-offered on a later cycle
             state = DealState(send_connection_request(session=session, profile=profile).value)
             # A fresh send returns PENDING — the only branch that spent a request.
             if state == DealState.PENDING:
@@ -153,6 +158,12 @@ def handle_connect(task, session, qualifiers):
             return
 
         # get_connection_status already navigated to the profile page
+        if not require_approval(
+            "LinkedIn connection request",
+            f"{public_id}" + (f" — {reason}" if reason else ""),
+        ):
+            logger.info("[%s] connect: not approved — slot skipped", campaign)
+            return
         new_state = DealState(send_connection_request(session=session, profile=profile).value)
 
         if new_state == DealState.QUALIFIED:

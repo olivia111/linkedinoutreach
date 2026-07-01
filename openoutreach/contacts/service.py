@@ -88,6 +88,14 @@ def contribute(session, lead, emails: list[str], origin: str) -> None:
                      lead.public_identifier, lead.country_code)
         return
 
+    from openoutreach.core.approval import require_approval
+    if not require_approval(
+        "contribute contact data to the central hub",
+        f"{lead.public_identifier} ({lead.country_code}): {emails}",
+    ):
+        logger.info("hub: contribution skipped (not approved) for %s", lead.public_identifier)
+        return
+
     config = SiteConfig.load()
     record = {
         "public_identifier": lead.public_identifier,

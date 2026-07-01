@@ -8,6 +8,7 @@ from datetime import timedelta
 from django.utils import timezone
 from termcolor import colored
 
+from openoutreach.core.approval import require_approval
 from openoutreach.crm.models import DealState
 from openoutreach.linkedin.models import ActionLog
 
@@ -112,6 +113,12 @@ def handle_follow_up(task, session, qualifiers):
 
     if decision.action == "send_message":
         logger.info("[%s] follow_up message for %s: %s", campaign, public_id, decision.message)
+        if not require_approval(
+            "LinkedIn follow-up message",
+            f"to {public_id}: {decision.message}",
+        ):
+            logger.info("[%s] follow_up: not approved — slot skipped", campaign)
+            return
         sent = send_raw_message(session, profile, decision.message)
         if not sent:
             set_profile_state(session, public_id, DealState.QUALIFIED.value)
