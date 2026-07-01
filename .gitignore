@@ -15,3 +15,8 @@ __pycache__/
 /media/
 .cache/
 tests/fixtures/pages/**/*.html
+
+# Local outputs that may contain scraped PII or secrets — never commit
+/leads.csv
+*.leads.csv
+/onboard*.json

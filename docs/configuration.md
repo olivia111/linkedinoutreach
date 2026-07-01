@@ -16,6 +16,35 @@ OpenAI-compatible provider works. These are prompted during interactive onboardi
 
 These can also be set as environment variables directly.
 
+## Human-in-the-loop Approval (`REQUIRE_APPROVAL`)
+
+Every outbound action that leaves the machine is gated behind an interactive
+confirmation. With `REQUIRE_APPROVAL` on (the default), the daemon pauses and
+prompts `Proceed? [y/N]` before each of:
+
+- a LinkedIn connection request,
+- a LinkedIn follow-up message,
+- a cold email,
+- an OpenOutreach newsletter signup,
+- a contacts-store (hub) contribution,
+- a paid BetterContact email lookup.
+
+| Variable | Description | Default |
+|:---------|:------------|:--------|
+| `REQUIRE_APPROVAL` | Require interactive `y/N` confirmation before any outbound action. `0`/`false`/`no`/`off` restores the original fully-autonomous behavior. | `1` (on) |
+
+Behavior:
+
+- **On + interactive terminal** → prompts; only an explicit `y`/`yes` proceeds. Anything else skips that one action (non-destructive — the daemon moves to the next slot; the item may be re-offered on a later cycle).
+- **On + no TTY (headless/Docker)** → every gated action is **denied** and logged. Run the daemon attached to a terminal to approve actions, or set `REQUIRE_APPROVAL=0` to run unattended.
+- **Off** → no prompts; original autonomous behavior.
+
+The gate lives in `core/approval.py`; the default is set in `core/conf.py`.
+Related: the GDPR newsletter/contribution auto-overrides (`linkedin/setup/geo.py`)
+are disabled — no opt-in flag is ever flipped automatically; `subscribe_newsletter`
+and `contribute_to_hub` stay exactly as set in Django Admin, and new onboarding
+defaults both to **off**.
+
 ## Campaign Settings (Django Model)
 
 Campaign data is stored in the `Campaign` Django model (with `name` and `users` M2M), managed via
@@ -28,6 +57,28 @@ Django Admin (`/admin/`) or created during interactive onboarding.
 | `booking_link` | string | URL included in follow-up messages when suggesting a meeting. |
 | `is_freemium` | boolean | Whether this is a freemium campaign (uses KitQualifier instead of BayesianQualifier). |
 | `action_fraction` | float | Target fraction of total connections for freemium campaigns. |
+| `auto_generate_keywords` | boolean | When `True` (default), the LLM generates People search queries from `product_docs` + `campaign_objective`. Set `False` to use only operator-supplied `SearchKeyword` rows and never call the LLM for keywords. |
+
+### Supplying your own People search queries
+
+To skip LLM keyword generation and search with queries you write yourself, pass
+them to the read-only discovery command:
+
+```bash
+# Inline; turns OFF auto_generate_keywords for the campaign
+python manage.py discover --queries "CTO fintech London" "VP Engineering SaaS"
+
+# From a file (one query per line; blank lines and #-comments ignored)
+python manage.py discover --queries-file queries.txt
+
+# Keep LLM generation on too (your queries run first, generated ones after)
+python manage.py discover --queries "Head of Data healthcare" --auto-keywords
+```
+
+Supplying queries inserts them as `SearchKeyword` rows and sets
+`auto_generate_keywords=False` (unless `--auto-keywords` is given). The daemon
+and `discover` both honor the flag, so once your queries are exhausted the
+pipeline stops searching rather than inventing new keywords.
 
 ## Account Settings (Django Model)
 

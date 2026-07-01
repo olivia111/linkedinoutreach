@@ -20,6 +20,13 @@ def run_search(session) -> str | None:
     campaign = session.campaign
 
     if not SearchKeyword.objects.filter(campaign=campaign, used=False).exists():
+        if not campaign.auto_generate_keywords:
+            logger.info(
+                colored("▶ search", "magenta", attrs=["bold"])
+                + " no unused queries and keyword generation is off for %s — "
+                "stopping (supply more via `discover --queries`).", campaign,
+            )
+            return None
         used = list(
             SearchKeyword.objects.filter(campaign=campaign, used=True)
             .values_list("keyword", flat=True)

@@ -61,6 +61,10 @@ class Campaign(models.Model):
     action_fraction = models.FloatField(default=0.2)
     seed_public_ids = models.JSONField(default=list, blank=True)
     model_blob = models.BinaryField(null=True, blank=True)
+    # When False, the pipeline never LLM-generates People search queries — it uses
+    # only the SearchKeyword rows the operator supplied (e.g. via
+    # `discover --queries`). Default True preserves the auto-generated behavior.
+    auto_generate_keywords = models.BooleanField(default=True)
 
     def __str__(self):
         return self.name
