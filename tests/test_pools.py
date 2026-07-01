@@ -202,6 +202,25 @@ class TestQualifySource:
         assert results == ["alice"]
         assert mock_search.call_count == 1
 
+    def test_keeps_searching_when_a_keyword_yields_no_new_candidates(self):
+        """A keyword that surfaces only already-seen profiles (still empty pool)
+        must not end the run — the next keyword is tried until candidates appear."""
+        scorer = BayesianQualifier(seed=42)
+        candidates = [_make_candidate(1, np.zeros(384, dtype=np.float32))]
+
+        with (
+            # empty after kw1 (all already seen), then candidates after kw2
+            patch("openoutreach.linkedin.pipeline.pools.fetch_qualification_candidates",
+                  side_effect=[[], [], candidates, candidates]),
+            patch("openoutreach.linkedin.pipeline.pools._needs_search", return_value=False),
+            patch("openoutreach.linkedin.pipeline.pools.run_qualification", side_effect=["alice", None]),
+            patch("openoutreach.linkedin.pipeline.pools.run_search", side_effect=["kw1", "kw2", None]) as mock_search,
+        ):
+            results = list(qualify_source("session", scorer))
+
+        assert results == ["alice"]
+        assert mock_search.call_count == 2  # kw1 (no new), kw2 (brought candidates)
+
     def test_stops_when_search_exhausted_and_no_candidates(self):
         """When no candidates and search returns None, generator stops."""
         scorer = BayesianQualifier(seed=42)

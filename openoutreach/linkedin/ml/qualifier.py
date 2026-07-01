@@ -51,7 +51,7 @@ def qualify_with_llm(profile_text: str, product_docs: str, campaign_objective: s
     """
     from pydantic_ai import Agent
 
-    from openoutreach.core.llm import get_llm_model, run_agent_sync
+    from openoutreach.core.llm import get_llm_model, run_agent_with_backoff
 
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(PROMPTS_DIR)))
     template = env.get_template("qualify_lead.j2")
@@ -67,7 +67,7 @@ def qualify_with_llm(profile_text: str, product_docs: str, campaign_objective: s
         output_type=QualificationDecision,
         model_settings={"temperature": 0.7, "timeout": 60},
     )
-    decision = run_agent_sync(agent.run(prompt)).output
+    decision = run_agent_with_backoff(lambda: agent.run(prompt)).output
 
     label = 1 if decision.qualified else 0
     return (label, decision.reason)

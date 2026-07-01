@@ -105,13 +105,17 @@ def qualify_source(session, qualifier: BayesianQualifier) -> Generator[str, None
     while True:
         candidates = fetch_qualification_candidates(session)
 
-        # If no candidates at all, search to bring some in
+        # If no candidates at all, keep searching — one keyword at a time —
+        # until new candidates appear or every keyword is exhausted. A single
+        # keyword can surface only already-seen profiles (0 new candidates);
+        # when that happens we must try the NEXT keyword, not give up on the
+        # whole pipeline (the old "search once, else return" did exactly that,
+        # so a stale first keyword stranded all the remaining ones).
         if not candidates:
-            if next(search, None) is None:
-                return
-            candidates = fetch_qualification_candidates(session)
-            if not candidates:
-                return
+            while not candidates:
+                if next(search, None) is None:
+                    return
+                candidates = fetch_qualification_candidates(session)
 
         # In exploit mode with no P > 0.5 candidates, keep searching
         # until the positive pool is non-empty or search is exhausted.

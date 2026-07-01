@@ -28,10 +28,15 @@ slot stays inside this module — the caller thread is never touched.
 from __future__ import annotations
 
 import asyncio
+import logging
+import re
 import threading
+import time
 from typing import Awaitable, Callable, TypeVar
 
 from tenacity import retry, stop_after_attempt, wait_exponential
+
+logger = logging.getLogger(__name__)
 
 _T = TypeVar("_T")
 
@@ -86,6 +91,69 @@ def _get_runner() -> _AgentRunner:
 def run_agent_sync(coro: Awaitable[_T]) -> _T:
     """Drive *coro* on the dedicated LLM runner thread + loop."""
     return _get_runner().run(coro)
+
+
+# ── Rate-limit backoff ───────────────────────────────────────────────
+
+# Some providers (notably Gemini's free tier: 5 requests/min) return HTTP 429
+# with a `retryDelay` telling us exactly how long to wait. The openai/anthropic
+# SDK clients retry 429 internally, but the Google provider does not honor the
+# long free-tier delay — so we retry at the application level here.
+_BACKOFF_MAX_ATTEMPTS = 6
+_BACKOFF_MAX_DELAY_S = 90.0
+
+
+def _retry_delay_from_429(exc) -> float | None:
+    """Parse the server-advised retry delay (seconds) from a 429, or None.
+
+    Handles both the structured ``RetryInfo`` detail (``retryDelay: '46s'``) and
+    the human message (``Please retry in 46.7s``).
+    """
+    body = getattr(exc, "body", None)
+    message = ""
+    if isinstance(body, dict):
+        error = body.get("error", {}) if isinstance(body.get("error"), dict) else {}
+        for detail in error.get("details", []) or []:
+            if isinstance(detail, dict) and str(detail.get("@type", "")).endswith("RetryInfo"):
+                m = re.match(r"([0-9.]+)s", str(detail.get("retryDelay", "")))
+                if m:
+                    return float(m.group(1))
+        message = str(error.get("message", ""))
+    else:
+        message = str(body or exc)
+    m = re.search(r"retry in ([0-9.]+)\s*s", message)
+    return float(m.group(1)) if m else None
+
+
+def run_agent_with_backoff(
+    make_coro: Callable[[], Awaitable[_T]],
+    *,
+    max_attempts: int = _BACKOFF_MAX_ATTEMPTS,
+) -> _T:
+    """Run an agent coroutine, retrying on HTTP 429 with server-advised backoff.
+
+    *make_coro* is a **factory** (e.g. ``lambda: agent.run(prompt)``), not a
+    coroutine, because a coroutine can only be awaited once — each retry needs a
+    fresh one. On a 429 we sleep the ``retryDelay`` the API returned (a small
+    cushion added), capped at ``_BACKOFF_MAX_DELAY_S``; other errors propagate
+    immediately. The final attempt re-raises so a persistent outage still fails.
+    """
+    from pydantic_ai.exceptions import ModelHTTPError
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return run_agent_sync(make_coro())
+        except ModelHTTPError as exc:
+            if getattr(exc, "status_code", None) != 429 or attempt == max_attempts:
+                raise
+            advised = _retry_delay_from_429(exc)
+            delay = min((advised + 1.0) if advised is not None else 5.0 * 2 ** (attempt - 1),
+                        _BACKOFF_MAX_DELAY_S)
+            logger.warning(
+                "LLM rate limited (429) — waiting %.0fs, then retry %d/%d",
+                delay, attempt + 1, max_attempts,
+            )
+            time.sleep(delay)
 
 
 # ── Per-provider builders ────────────────────────────────────────────

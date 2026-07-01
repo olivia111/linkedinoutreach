@@ -99,6 +99,18 @@ def configure_logging(level: int = logging.DEBUG):
     root = logging.getLogger()
     root.handlers.clear()
 
+    # On Windows the default console/pipe encoding is cp1252, which can't encode
+    # the emoji/box-drawing characters in log messages (e.g. "▶") and raises
+    # UnicodeEncodeError inside the logging handler. Force UTF-8 with a safe
+    # fallback so a decorative glyph never turns a log line into a traceback.
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            try:
+                reconfigure(encoding="utf-8", errors="backslashreplace")
+            except (ValueError, OSError):
+                pass
+
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(ColoredFormatter("%(message)s"))
     handler.setLevel(level)
