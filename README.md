@@ -127,31 +127,34 @@ Then open:
 
 ### 4. Manual Helper Scripts (Optional)
 
-Beyond the daemon, `scripts/` holds standalone helpers for driving a session by hand. Run them with the project venv (`.venv/bin/python` on macOS/Linux, `.venv/Scripts/python` on Windows).
+Beyond the daemon, `scripts/` holds standalone helpers for driving a session by hand. Run them with the project venv's interpreter, written below as `<python>`:
+
+- **macOS / Linux:** `<python>` = `.venv/bin/python`
+- **Windows:** `<python>` = `.venv\Scripts\python`
 
 **Open a session** — resume saved cookies (or log in if expired) and hold the browser open:
 ```bash
-.venv/bin/python scripts/open_session.py            # default profile (id=1), held open
-.venv/bin/python scripts/open_session.py --once     # open, report identity, then close
-.venv/bin/python scripts/open_session.py --profile 2
+<python> scripts/open_session.py            # default profile (id=1), held open
+<python> scripts/open_session.py --once     # open, report identity, then close
+<python> scripts/open_session.py --profile 2
 ```
 
 **Search People + send note-bearing connection requests** — check/open the session, run a People search, and send a connection request with a note from a provided template. Each send is gated behind a `y/N` approval prompt and respects the daily connect / weekly-invite limits:
 ```bash
 # Template-driven (bundled scripts/connect_note.template.txt), approval per send:
-.venv/bin/python scripts/search_connect.py --query "CEO Healthcare Startup" --max 8
+<python> scripts/search_connect.py --query "CEO Healthcare Startup" --max 8
 
 # Provide your own template file:
-.venv/bin/python scripts/search_connect.py --query "Head of Growth" --template-file path/to/note.txt --max 5
+<python> scripts/search_connect.py --query "Head of Growth" --template-file path/to/note.txt --max 5
 
 # Inline template ({first_name} or XXX is filled from the profile):
-.venv/bin/python scripts/search_connect.py --query "Founder fintech" --template "Hi {first_name}, loved your work — open to a quick chat?"
+<python> scripts/search_connect.py --query "Founder fintech" --template "Hi {first_name}, loved your work — open to a quick chat?"
 
 # LLM-personalized note instead of a template:
-.venv/bin/python scripts/search_connect.py --query "VP Sales" --personalize
+<python> scripts/search_connect.py --query "VP Sales" --personalize
 
 # Unattended (skip the approval gate) — sends real invites, use with care:
-.venv/bin/python scripts/search_connect.py --query "..." --yes
+<python> scripts/search_connect.py --query "..." --yes
 ```
 
 ---
